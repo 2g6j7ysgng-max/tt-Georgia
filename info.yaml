@@ -1,9 +1,9 @@
 # Tiny Tapeout project information
 project:
-  title:        ""      # Programmable Protocol Emulator
-  author:       ""      # Kirill Mukhutdionv
-  discord:      ""      # zirew
-  description:  ""      # PIO-compatible programmable controller for UART, SPI, I2C and custom protocols
+  title:        "Programmable Protocol Emulator"
+  author:       "Kirill Mukhutdinov"
+  discord:      "zirew"
+  description:  "PIO-compatible programmable controller for UART, SPI, I2C and custom protocols"
   language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
   clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
 
