@@ -31,7 +31,6 @@ module tb_pio_pc;
   logic [31:0] x;
   logic        issue, exec;
 
-  assign issue     = clk_en && (dut.delay_cnt == 5'd0);
   assign stall     = (pc == 5'd0) && fifo_empty;
   assign exec      = issue && !stall;
   assign jmp_taken = (pc == 5'd3) && (x != 32'd0);

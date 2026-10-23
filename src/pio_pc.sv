@@ -32,7 +32,8 @@ module pio_pc (
   input  logic [4:0] wrap_bottom,
   input  logic [4:0] instr_delay,  // задержка [12:8]
 
-  output logic [4:0] pc
+  output logic [4:0] pc,
+    output logic       issue
 );
 
   logic [4:0] pc_next;
@@ -88,6 +89,6 @@ module pio_pc (
     end
 
   end  
-  
+    assign issue = clk_en && (delay_cnt == 5'd0);
 
 endmodule
