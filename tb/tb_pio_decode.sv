@@ -1,96 +1,97 @@
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 20.10.2026 20:54:16
-// Design Name: 
-// Module Name: tb_pio_decode
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
-
-`timescale 1ns / 1ps
-
 module tb_pio_decode;
 
-  logic [15:0] instr;
-  logic [2:0]  sideset_count;
-  logic        side_en;
+    logic [15:0] instr;
+    logic [ 2:0] sideset_count;
+    logic        side_en;
 
-  logic        is_jmp, is_wait, is_in, is_out;
-  logic        is_push, is_pull, is_mov, is_irq, is_set;
-  logic [4:0]  delay;
-  logic        side_valid;
-  logic [4:0]  side_value;
-  logic [2:0]  arg_hi;
-  logic [4:0]  arg_lo;
+    wire         is_jmp;
+    wire         is_wait;
+    wire         is_in;
+    wire         is_out;
+    wire         is_push;
+    wire         is_pull;
+    wire         is_mov;
+    wire         is_irq;
+    wire         is_set;
 
-  pio_decode dut (.*);
+    wire  [ 4:0] delay;
+    wire         side_valid;
+    wire  [ 4:0] side_value;
+    wire  [ 2:0] arg_hi;
+    wire  [ 4:0] arg_lo;
 
-  int errors = 0;
+    pio_decode dut (.*);
 
-  initial begin
-    instr = 16'h9FA0; sideset_count = 3'd2; side_en = 1'b1; #1;
-    if (!is_pull || is_push || delay != 5'd7 || !side_valid || side_value != 5'd1) begin
-      errors++;
-      $display("ERROR 9FA0: pull=%b push=%b delay=%0d sv=%b sval=%0d",
-               is_pull, is_push, delay, side_valid, side_value);
+    //------------------------------------------------------------------------
+
+    task automatic run
+    (
+        input logic [15:0] i,
+        input logic [ 2:0] count,
+        input logic        en,
+        input logic [ 8:0] exp_cmd,
+        input logic [ 4:0] exp_delay,
+        input logic        exp_side_valid,
+        input logic [ 4:0] exp_side_value,
+        input logic [ 2:0] exp_arg_hi,
+        input logic [ 4:0] exp_arg_lo
+    );
+
+        logic [8:0] cmd;
+
+        instr         = i;
+        sideset_count = count;
+        side_en       = en;
+
+        # 1;
+
+        cmd = { is_jmp, is_wait, is_in, is_out, is_push,
+                is_pull, is_mov, is_irq, is_set };
+
+        if (   cmd        !== exp_cmd
+            || delay      !== exp_delay
+            || side_valid !== exp_side_valid
+            || (exp_side_valid && side_value !== exp_side_value)
+            || arg_hi     !== exp_arg_hi
+            || arg_lo     !== exp_arg_lo)
+        begin
+            $display ("FAIL %s", `__FILE__);
+
+            $display ("++ TEST     => instr %h sideset_count %0d side_en %b",
+                i, count, en);
+
+            $display ("++ EXPECTED => cmd %b delay %0d side %b/%0d arg %0d/%0d",
+                exp_cmd, exp_delay, exp_side_valid, exp_side_value,
+                exp_arg_hi, exp_arg_lo);
+
+            $display ("++ ACTUAL   => cmd %b delay %0d side %b/%0d arg %0d/%0d",
+                cmd, delay, side_valid, side_value, arg_hi, arg_lo);
+
+            $finish (1);
+        end
+
+    endtask
+
+    //------------------------------------------------------------------------
+
+    initial
+    begin
+        run (16'h9FA0, 3'd2, 1'b1, 9'b000001000, 5'd7, 1'b1, 5'd1, 3'd5, 5'd0);
+        run (16'hF727, 3'd2, 1'b1, 9'b000000001, 5'd7, 1'b1, 5'd0, 3'd1, 5'd7);
+        run (16'h6001, 3'd2, 1'b1, 9'b000100000, 5'd0, 1'b0, 5'd0, 3'd0, 5'd1);
+        run (16'h0642, 3'd2, 1'b1, 9'b100000000, 5'd6, 1'b0, 5'd0, 3'd2, 5'd2);
+
+        run (16'hE101, 3'd0, 1'b0, 9'b000000001, 5'd1, 1'b0, 5'd0, 3'd0, 5'd1);
+        run (16'h7001, 3'd1, 1'b0, 9'b000100000, 5'd0, 1'b1, 5'd1, 3'd0, 5'd1);
+
+        run (16'h8020, 3'd0, 1'b0, 9'b000010000, 5'd0, 1'b0, 5'd0, 3'd1, 5'd0);
+        run (16'h2080, 3'd0, 1'b0, 9'b010000000, 5'd0, 1'b0, 5'd0, 3'd4, 5'd0);
+        run (16'h4001, 3'd0, 1'b0, 9'b001000000, 5'd0, 1'b0, 5'd0, 3'd0, 5'd1);
+        run (16'hA042, 3'd0, 1'b0, 9'b000000100, 5'd0, 1'b0, 5'd0, 3'd2, 5'd2);
+        run (16'hC000, 3'd0, 1'b0, 9'b000000010, 5'd0, 1'b0, 5'd0, 3'd0, 5'd0);
+
+        $display ("PASS %s", `__FILE__);
+        $finish;
     end
-
-    instr = 16'hF727; sideset_count = 3'd2; side_en = 1'b1; #1;
-    if (!is_set || delay != 5'd7 || !side_valid || side_value != 5'd0 ||
-        arg_hi != 3'd1 || arg_lo != 5'd7) begin
-      errors++;
-      $display("ERROR F727: set=%b delay=%0d sv=%b sval=%0d hi=%0d lo=%0d",
-               is_set, delay, side_valid, side_value, arg_hi, arg_lo);
-    end
-
-    instr = 16'h6001; sideset_count = 3'd2; side_en = 1'b1; #1;
-    if (!is_out || delay != 5'd0 || side_valid ||
-        arg_hi != 3'd0 || arg_lo != 5'd1) begin
-      errors++;
-      $display("ERROR 6001: out=%b delay=%0d sv=%b hi=%0d lo=%0d",
-               is_out, delay, side_valid, arg_hi, arg_lo);
-    end
-
-    instr = 16'h0642; sideset_count = 3'd2; side_en = 1'b1; #1;
-    if (!is_jmp || delay != 5'd6 || side_valid ||
-        arg_hi != 3'd2 || arg_lo != 5'd2) begin
-      errors++;
-      $display("ERROR 0642: jmp=%b delay=%0d sv=%b hi=%0d lo=%0d",
-               is_jmp, delay, side_valid, arg_hi, arg_lo);
-    end
-
-    instr = 16'hE101; sideset_count = 3'd0; side_en = 1'b0; #1;
-    if (!is_set || delay != 5'd1 || side_valid ||
-        arg_hi != 3'd0 || arg_lo != 5'd1) begin
-      errors++;
-      $display("ERROR E101: set=%b delay=%0d sv=%b hi=%0d lo=%0d",
-               is_set, delay, side_valid, arg_hi, arg_lo);
-    end
-
-    instr = 16'h7001; sideset_count = 3'd1; side_en = 1'b0; #1;
-    if (!is_out || delay != 5'd0 || !side_valid || side_value != 5'd1 ||
-        arg_lo != 5'd1) begin
-      errors++;
-      $display("ERROR 7001: out=%b delay=%0d sv=%b sval=%0d lo=%0d",
-               is_out, delay, side_valid, side_value, arg_lo);
-    end
-
-    if (errors == 0) $display("PASS: decoder, 6 vectors");
-    else             $display("FAIL: %0d errors", errors);
-    $finish;
-  end
 
 endmodule

@@ -1,79 +1,156 @@
-`timescale 1ns / 1ps
+`include "pio.svh"
 
 module tb_pio_xy;
 
-  logic        clk = 1'b0;
-  always #5 clk = ~clk;
-  logic        rst_n;
+    logic clk;
 
-  logic        exec, is_set, is_jmp, jmp_pin, osre;
-  logic [2:0]  arg_hi;
-  logic [4:0]  arg_lo;
-  logic [31:0] x, y;
-  logic        jmp_taken;
+    initial
+    begin
+        clk = '0;
 
-  pio_xy dut (.*);
-
-  int errors = 0;
-
-  task automatic step(input logic s, input logic j, input logic [2:0] hi, input logic [4:0] lo);
-    @(negedge clk);
-    is_set = s; is_jmp = j; arg_hi = hi; arg_lo = lo; exec = 1'b1;
-  endtask
-
-  task automatic expect_jt(input logic exp, input string name);
-    if (jmp_taken !== exp) begin
-      errors++;
-      $display("ERROR %s: jmp_taken=%b expected %b (x=%0d y=%0d)", name, jmp_taken, exp, x, y);
+        forever
+            # 5 clk = ~ clk;
     end
-  endtask
 
-  task automatic expect_xy(input logic [31:0 ] ex, input logic [31:0] ey, input string name);
-    if (x !== ex || y !== ey) begin
-      errors++;
-      $display("ERROR %s: x=%0d y=%0d expected x=%0d y=%0d", name, x, y, ex, ey);
+    logic rst;
+
+    //------------------------------------------------------------------------
+
+    logic        exec;
+    logic        is_set;
+    logic        is_jmp;
+    logic [ 2:0] arg_hi;
+    logic [ 4:0] arg_lo;
+    logic        jmp_pin;
+    logic        osre;
+
+    wire  [31:0] x;
+    wire  [31:0] y;
+    wire         jmp_taken;
+
+    pio_xy dut (.*);
+
+    //------------------------------------------------------------------------
+
+    task automatic step
+    (
+        input logic       s,
+        input logic       j,
+        input logic [2:0] hi,
+        input logic [4:0] lo
+    );
+
+        @ (negedge clk);
+
+        exec   = 1'b1;
+        is_set = s;
+        is_jmp = j;
+        arg_hi = hi;
+        arg_lo = lo;
+
+    endtask
+
+    //------------------------------------------------------------------------
+
+    task automatic check_jmp (input string name, input logic exp);
+
+        # 1;
+
+        if (jmp_taken !== exp)
+        begin
+            $display ("FAIL %s", `__FILE__);
+            $display ("++ TEST     => %s", name);
+            $display ("++ EXPECTED => jmp_taken %b", exp);
+            $display ("++ ACTUAL   => jmp_taken %b, x %h, y %h", jmp_taken, x, y);
+            $finish (1);
+        end
+
+    endtask
+
+    //------------------------------------------------------------------------
+
+    task automatic check_xy (input string name, input logic [31:0] exp_x, input logic [31:0] exp_y);
+
+        @ (posedge clk);
+        # 1;
+
+        if ((x !== exp_x) | (y !== exp_y))
+        begin
+            $display ("FAIL %s", `__FILE__);
+            $display ("++ TEST     => %s", name);
+            $display ("++ EXPECTED => x %h, y %h", exp_x, exp_y);
+            $display ("++ ACTUAL   => x %h, y %h", x, y);
+            $finish (1);
+        end
+
+    endtask
+
+    //------------------------------------------------------------------------
+
+    initial
+    begin
+        rst     = 1'b1;
+        exec    = 1'b0;
+        is_set  = 1'b0;
+        is_jmp  = 1'b0;
+        arg_hi  = '0;
+        arg_lo  = '0;
+        jmp_pin = 1'b0;
+        osre    = 1'b1;
+
+        repeat (2) @ (negedge clk);
+        rst = 1'b0;
+
+        step (1, 0, `PIO_DST_X, 5'd7);   check_xy ("set x 7", 7, 0);
+        step (1, 0, `PIO_DST_Y, 5'd31);  check_xy ("set y 31", 7, 31);
+
+        step (0, 1, `PIO_COND_ALWAYS, 5'd2);  check_jmp ("jmp always", 1);
+        step (0, 1, `PIO_COND_NOT_X,  5'd2);  check_jmp ("jmp !x, x 7", 0);
+        step (0, 1, `PIO_COND_NOT_Y,  5'd2);  check_jmp ("jmp !y, y 31", 0);
+        step (0, 1, `PIO_COND_X_NE_Y, 5'd2);  check_jmp ("jmp x != y", 1);
+
+        jmp_pin = 1'b0;  step (0, 1, `PIO_COND_PIN,      5'd2);  check_jmp ("jmp pin 0", 0);
+        jmp_pin = 1'b1;  step (0, 1, `PIO_COND_PIN,      5'd2);  check_jmp ("jmp pin 1", 1);
+        osre    = 1'b1;  step (0, 1, `PIO_COND_NOT_OSRE, 5'd2);  check_jmp ("jmp !osre, empty", 0);
+        osre    = 1'b0;  step (0, 1, `PIO_COND_NOT_OSRE, 5'd2);  check_jmp ("jmp !osre, not empty", 1);
+
+        step (1, 0, `PIO_DST_X, 5'd2);  check_xy ("set x 2", 2, 31);
+
+        step (0, 1, `PIO_COND_X_DEC, 5'd2);  check_jmp ("x--, x 2", 1);
+        check_xy ("x-- -> 1", 1, 31);
+
+        step (0, 1, `PIO_COND_X_DEC, 5'd2);  check_jmp ("x--, x 1", 1);
+        check_xy ("x-- -> 0", 0, 31);
+
+        step (0, 1, `PIO_COND_X_DEC, 5'd2);  check_jmp ("x--, x 0, not taken", 0);
+        check_xy ("x-- -> -1, always", 32'hFFFF_FFFF, 31);
+
+        step (0, 1, `PIO_COND_Y_DEC, 5'd2);  check_jmp ("y--, y 31", 1);
+        check_xy ("y-- -> 30", 32'hFFFF_FFFF, 30);
+
+        step (1, 0, `PIO_DST_X, 5'd30);  check_xy ("set x 30", 30, 30);
+        step (0, 1, `PIO_COND_X_NE_Y, 5'd2);  check_jmp ("jmp x != y, x = y = 30", 0);
+
+        @ (negedge clk);
+
+        exec   = 1'b0;
+        is_set = 1'b1;
+        arg_hi = `PIO_DST_X;
+        arg_lo = 5'd5;
+
+        check_xy ("no exec, no write", 30, 30);
+
+        $display ("PASS %s", `__FILE__);
+        $finish;
     end
-  endtask
 
-  initial begin
-    rst_n = 1'b0; exec = 1'b0; is_set = 1'b0; is_jmp = 1'b0;
-    arg_hi = 3'd0; arg_lo = 5'd0; jmp_pin = 1'b0; osre = 1'b1;
-    repeat (2) @(negedge clk);
-    rst_n = 1'b1;
+    //------------------------------------------------------------------------
 
-    step(1, 0, 3'b001, 5'd7);  @(posedge clk); #1; expect_xy(7, 0, "set x 7");
-    step(1, 0, 3'b010, 5'd31); @(posedge clk); #1; expect_xy(7, 31, "set y 31");
-
-    step(0, 1, 3'b000, 5'd2);  #1; expect_jt(1, "jmp always");
-    step(0, 1, 3'b001, 5'd2);  #1; expect_jt(0, "jmp !x, x=7");
-    step(0, 1, 3'b011, 5'd2);  #1; expect_jt(0, "jmp !y, y=31");
-    step(0, 1, 3'b101, 5'd2);  #1; expect_jt(1, "jmp x!=y");
-
-    jmp_pin = 1'b0; step(0, 1, 3'b110, 5'd2); #1; expect_jt(0, "jmp pin=0");
-    jmp_pin = 1'b1; step(0, 1, 3'b110, 5'd2); #1; expect_jt(1, "jmp pin=1");
-    osre = 1'b1;    step(0, 1, 3'b111, 5'd2); #1; expect_jt(0, "jmp !osre, empty");
-    osre = 1'b0;    step(0, 1, 3'b111, 5'd2); #1; expect_jt(1, "jmp !osre, not empty");
-
-    step(1, 0, 3'b001, 5'd2);  @(posedge clk); #1; expect_xy(2, 31, "set x 2");
-    step(0, 1, 3'b010, 5'd2);  #1; expect_jt(1, "x-- x=2");
-    @(posedge clk); #1; expect_xy(1, 31, "x-- -> 1");
-    step(0, 1, 3'b010, 5'd2);  #1; expect_jt(1, "x-- x=1");
-    @(posedge clk); #1; expect_xy(0, 31, "x-- -> 0");
-    step(0, 1, 3'b010, 5'd2);  #1; expect_jt(0, "x-- x=0 not taken");
-    @(posedge clk); #1; expect_xy(32'hFFFF_FFFF, 31, "x-- -> -1 always");
-
-    step(0, 1, 3'b100, 5'd2);  #1; expect_jt(1, "y-- y=31");
-    @(posedge clk); #1; expect_xy(32'hFFFF_FFFF, 30, "y-- -> 30");
-
-    step(1, 0, 3'b001, 5'd30); @(posedge clk); #1;
-    step(0, 1, 3'b101, 5'd2);  #1; expect_jt(0, "jmp x!=y, x=y=30");
-
-    @(negedge clk); exec = 1'b0; is_set = 1'b1; arg_hi = 3'b001; arg_lo = 5'd5;
-    @(posedge clk); #1; expect_xy(30, 30, "no exec -> no write");
-
-    if (errors == 0) $display("PASS: pio_xy");
-    else             $display("FAIL: %0d errors", errors);
-    $finish;
-  end
+    initial
+    begin
+        repeat (10000) @ (posedge clk);
+        $display ("FAIL %s: timeout reached!", `__FILE__);
+        $finish;
+    end
 
 endmodule

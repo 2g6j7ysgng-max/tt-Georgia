@@ -1,48 +1,75 @@
-module pio_xy (
-  input  logic        clk,
-  input  logic        rst_n,
-  input  logic        exec,
-  input  logic        is_set,
-  input  logic        is_jmp,
-  input  logic [2:0]  arg_hi,
-  input  logic [4:0]  arg_lo,
-  input  logic        jmp_pin,
-  input  logic        osre,
+`include "pio.svh"
 
-  output logic [31:0] x,
-  output logic [31:0] y,
-  output logic        jmp_taken
+module pio_xy
+(
+    input               clk,
+    input               rst,
+
+    input               exec,
+    input               is_set,
+    input               is_jmp,
+    input        [ 2:0] arg_hi,
+    input        [ 4:0] arg_lo,
+    input               jmp_pin,
+    input               osre,
+
+    output logic [31:0] x,
+    output logic [31:0] y,
+    output              jmp_taken
 );
 
-  logic cond;
+    logic cond;
 
-  always_comb begin
-    case (arg_hi)
-      3'b000: cond = 1'b1;
-      3'b001: cond = (x == 32'd0);
-      3'b010: cond = (x != 32'd0);
-      3'b101: cond = (x != y);
-            3'b011: cond = (y == 32'd0);
-      3'b100: cond = (y != 32'd0);
-      3'b110: cond = (jmp_pin);
-      3'b111: cond = (!osre);
+    always_comb
+        case (arg_hi)
+            default            : cond = 1'b1;
+            `PIO_COND_ALWAYS   : cond = 1'b1;
+            `PIO_COND_NOT_X    : cond = (x == '0);
+            `PIO_COND_X_DEC    : cond = (x != '0);
+            `PIO_COND_NOT_Y    : cond = (y == '0);
+            `PIO_COND_Y_DEC    : cond = (y != '0);
+            `PIO_COND_X_NE_Y   : cond = (x != y);
+            `PIO_COND_PIN      : cond =   jmp_pin;
+            `PIO_COND_NOT_OSRE : cond = ~ osre;
+        endcase
 
-      default: cond = 1'b0;
-    endcase
-  end
+    assign jmp_taken = is_jmp & cond;
 
-  assign jmp_taken = is_jmp && cond;
+    //------------------------------------------------------------------------
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      x <= 32'd0;
-      y <= 32'd0;
-    end else if (exec) begin
-         if (is_set && arg_hi == 3'b001) x <= {27'd0, arg_lo};
-      if (is_set && arg_hi == 3'b010) y <= {27'd0, arg_lo};
-      if (is_jmp && arg_hi == 3'b010) x <= x - 32'd1;
-      if (is_jmp && arg_hi == 3'b100) y <= y - 32'd1;
+    logic [31:0] x_d;
+    logic [31:0] y_d;
+
+    always_comb
+    begin
+        x_d = x;
+        y_d = y;
+
+        if (exec & is_set)
+            case (arg_hi)
+                `PIO_DST_X : x_d = { 27'b0, arg_lo };
+                `PIO_DST_Y : y_d = { 27'b0, arg_lo };
+            endcase
+
+        if (exec & is_jmp)
+            case (arg_hi)
+                `PIO_COND_X_DEC : x_d = x - 1'b1;
+                `PIO_COND_Y_DEC : y_d = y - 1'b1;
+            endcase
     end
-  end
+
+    //------------------------------------------------------------------------
+
+    always_ff @ (posedge clk or posedge rst)
+        if (rst)
+        begin
+            x <= '0;
+            y <= '0;
+        end
+        else
+        begin
+            x <= x_d;
+            y <= y_d;
+        end
 
 endmodule

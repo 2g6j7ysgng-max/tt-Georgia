@@ -1,40 +1,55 @@
-`timescale 1ns / 1ps
+`include "pio.svh"
 
-module pio_decode (
-  input  logic [15:0] instr,
-  input  logic [2:0]  sideset_count,
-  input  logic        side_en,
+module pio_decode
+(
+    input        [15:0] instr,
+    input        [ 2:0] sideset_count,
+    input               side_en,
 
-  output logic        is_jmp, is_wait, is_in, is_out,
-  output logic        is_push, is_pull, is_mov, is_irq, is_set,
-  output logic [4:0]  delay,
-  output logic        side_valid,
-  output logic [4:0]  side_value,
-  output logic [2:0]  arg_hi,
-  output logic [4:0]  arg_lo
+    output              is_jmp,
+    output              is_wait,
+    output              is_in,
+    output              is_out,
+    output              is_push,
+    output              is_pull,
+    output              is_mov,
+    output              is_irq,
+    output              is_set,
+
+    output       [ 4:0] delay,
+    output              side_valid,
+    output       [ 4:0] side_value,
+    output       [ 2:0] arg_hi,
+    output       [ 4:0] arg_lo
 );
 
-  assign is_jmp  = (instr[15:13] == 3'b000);
-  assign is_wait = (instr[15:13] == 3'b001);
-  assign is_in   = (instr[15:13] == 3'b010);
-  assign is_out  = (instr[15:13] == 3'b011);
-  assign is_push = (instr[15:13] == 3'b100) && !instr[7];
-  assign is_pull = (instr[15:13] == 3'b100) &&  instr[7];
-  assign is_mov  = (instr[15:13] == 3'b101);
-  assign is_irq  = (instr[15:13] == 3'b110);
-  assign is_set  = (instr[15:13] == 3'b111);
+    logic [2:0] cmd_op;
 
-  assign arg_hi = instr[7:5];
-  assign arg_lo = instr[4:0];
+    assign cmd_op = instr [15:13];
+    assign arg_hi = instr [ 7: 5];
+    assign arg_lo = instr [ 4: 0];
 
-  assign delay = instr[12:8] & (5'b11111 >> sideset_count);
+    //------------------------------------------------------------------------
 
-  logic [4:0] side_bits;
-  assign side_bits = instr[12:8] >> (5 - sideset_count);
+    assign is_jmp  = (cmd_op == `PIO_OP_JMP       );
+    assign is_wait = (cmd_op == `PIO_OP_WAIT      );
+    assign is_in   = (cmd_op == `PIO_OP_IN        );
+    assign is_out  = (cmd_op == `PIO_OP_OUT       );
+    assign is_push = (cmd_op == `PIO_OP_PUSH_PULL ) & ~ instr [7];
+    assign is_pull = (cmd_op == `PIO_OP_PUSH_PULL ) &   instr [7];
+    assign is_mov  = (cmd_op == `PIO_OP_MOV       );
+    assign is_irq  = (cmd_op == `PIO_OP_IRQ       );
+    assign is_set  = (cmd_op == `PIO_OP_SET       );
 
-  assign side_valid = side_en ? instr[12] : (sideset_count != 3'd0);
+    //------------------------------------------------------------------------
 
-  assign side_value = side_en ? (side_bits & (5'b11111 >> (6 - sideset_count)))
-                              : side_bits;
+    logic [4:0] side_bits;
+
+    assign delay      = instr [12:8] & (5'b11111 >> sideset_count);
+    assign side_bits  = instr [12:8] >> (5 - sideset_count);
+    assign side_valid = side_en ? instr [12] : (sideset_count != '0);
+
+    assign side_value = side_en ? (side_bits & (5'b11111 >> (6 - sideset_count)))
+                                :  side_bits;
 
 endmodule
