@@ -19,8 +19,10 @@ module tb_pio_xy;
     logic        exec;
     logic        is_set;
     logic        is_jmp;
+    logic        is_out;
     logic [ 2:0] arg_hi;
     logic [ 4:0] arg_lo;
+    logic [31:0] out_data;
     logic        jmp_pin;
     logic        osre;
 
@@ -45,8 +47,25 @@ module tb_pio_xy;
         exec   = 1'b1;
         is_set = s;
         is_jmp = j;
+        is_out = 1'b0;
         arg_hi = hi;
         arg_lo = lo;
+
+    endtask
+
+    //------------------------------------------------------------------------
+
+    task automatic step_out (input logic [2:0] hi, input logic [31:0] data);
+
+        @ (negedge clk);
+
+        exec     = 1'b1;
+        is_set   = 1'b0;
+        is_jmp   = 1'b0;
+        is_out   = 1'b1;
+        arg_hi   = hi;
+        arg_lo   = '0;
+        out_data = data;
 
     endtask
 
@@ -89,14 +108,16 @@ module tb_pio_xy;
 
     initial
     begin
-        rst     = 1'b1;
-        exec    = 1'b0;
-        is_set  = 1'b0;
-        is_jmp  = 1'b0;
-        arg_hi  = '0;
-        arg_lo  = '0;
-        jmp_pin = 1'b0;
-        osre    = 1'b1;
+        rst      = 1'b1;
+        exec     = 1'b0;
+        is_set   = 1'b0;
+        is_jmp   = 1'b0;
+        is_out   = 1'b0;
+        arg_hi   = '0;
+        arg_lo   = '0;
+        out_data = '0;
+        jmp_pin  = 1'b0;
+        osre     = 1'b1;
 
         repeat (2) @ (negedge clk);
         rst = 1'b0;
@@ -131,6 +152,11 @@ module tb_pio_xy;
         step (1, 0, `PIO_DST_X, 5'd30);  check_xy ("set x 30", 30, 30);
         step (0, 1, `PIO_COND_X_NE_Y, 5'd2);  check_jmp ("jmp x != y, x = y = 30", 0);
 
+        step_out (`PIO_DST_X,    32'hDEAD_BEEF);  check_xy ("out x",    32'hDEAD_BEEF, 30);
+        step_out (`PIO_DST_Y,    32'h1234_5678);  check_xy ("out y",    32'hDEAD_BEEF, 32'h1234_5678);
+        step_out (`PIO_DST_NULL, 32'hFFFF_FFFF);  check_xy ("out null", 32'hDEAD_BEEF, 32'h1234_5678);
+        step_out (`PIO_DST_PINS, 32'hFFFF_FFFF);  check_xy ("out pins", 32'hDEAD_BEEF, 32'h1234_5678);
+
         @ (negedge clk);
 
         exec   = 1'b0;
@@ -138,7 +164,7 @@ module tb_pio_xy;
         arg_hi = `PIO_DST_X;
         arg_lo = 5'd5;
 
-        check_xy ("no exec, no write", 30, 30);
+        check_xy ("no exec, no write", 32'hDEAD_BEEF, 32'h1234_5678);
 
         $display ("PASS %s", `__FILE__);
         $finish;

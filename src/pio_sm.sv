@@ -14,12 +14,18 @@ module pio_sm
     input        [ 4:0] wrap_bottom,
     input        [ 2:0] sideset_count,
     input               side_en,
+    input        [ 2:0] side_base,
+    input        [ 2:0] out_base,
+    input        [ 3:0] out_count,
+    input               out_shift_right,
+    input        [ 4:0] pull_thresh,
 
     input               tx_empty,
+    input        [31:0] tx_data,
     output              tx_pop,
     input               jmp_pin,
 
-    output logic [ 4:0] side_out,
+    output       [ 7:0] pins,
     output       [ 4:0] pc,
     output       [31:0] x,
     output       [31:0] y
@@ -82,9 +88,7 @@ module pio_sm
     logic stall;
     logic jmp_taken;
 
-    assign stall  = is_pull & arg_hi [0] & tx_empty;
-    assign exec   = issue & ~ stall;
-    assign tx_pop = exec & is_pull & ~ tx_empty;
+    assign exec = issue & ~ stall;
 
     //------------------------------------------------------------------------
 
@@ -105,6 +109,34 @@ module pio_sm
 
     //------------------------------------------------------------------------
 
+    logic [31:0] out_data;
+    logic        osre;
+
+    pio_osr i_osr
+    (
+        .clk           ( clk             ),
+        .rst           ( rst             ),
+        .exec          ( exec            ),
+        .is_out        ( is_out          ),
+        .is_pull       ( is_pull         ),
+        .arg_lo        ( arg_lo          ),
+        .pull_ifempty  ( arg_hi [1]      ),
+        .pull_block    ( arg_hi [0]      ),
+        .shift_right   ( out_shift_right ),
+        .pull_thresh   ( pull_thresh     ),
+        .tx_empty      ( tx_empty        ),
+        .tx_data       ( tx_data         ),
+        .x             ( x               ),
+        .osr           (                 ),
+        .osr_cnt       (                 ),
+        .out_data      ( out_data        ),
+        .osre          ( osre            ),
+        .stall         ( stall           ),
+        .tx_pop        ( tx_pop          )
+    );
+
+    //------------------------------------------------------------------------
+
     pio_xy i_xy
     (
         .clk           ( clk           ),
@@ -112,10 +144,12 @@ module pio_sm
         .exec          ( exec          ),
         .is_set        ( is_set        ),
         .is_jmp        ( is_jmp        ),
+        .is_out        ( is_out        ),
         .arg_hi        ( arg_hi        ),
         .arg_lo        ( arg_lo        ),
+        .out_data      ( out_data      ),
         .jmp_pin       ( jmp_pin       ),
-        .osre          ( 1'b1          ),
+        .osre          ( osre          ),
         .x             ( x             ),
         .y             ( y             ),
         .jmp_taken     ( jmp_taken     )
@@ -123,10 +157,27 @@ module pio_sm
 
     //------------------------------------------------------------------------
 
-    always_ff @ (posedge clk or posedge rst)
-        if (rst)
-            side_out <= '0;
-        else if (issue & side_valid)
-            side_out <= side_value;
+    logic       out_pins_we;
+    logic       side_we;
+    logic [2:0] side_count;
+
+    assign out_pins_we = exec  & is_out & (arg_hi == `PIO_DST_PINS);
+    assign side_we     = issue & side_valid;
+    assign side_count  = sideset_count - { 2'b0, side_en };
+
+    pio_pins i_pins
+    (
+        .clk           ( clk           ),
+        .rst           ( rst           ),
+        .out_we        ( out_pins_we   ),
+        .out_data      ( out_data      ),
+        .out_base      ( out_base      ),
+        .out_count     ( out_count     ),
+        .side_we       ( side_we       ),
+        .side_value    ( side_value    ),
+        .side_base     ( side_base     ),
+        .side_count    ( side_count    ),
+        .pins          ( pins          )
+    );
 
 endmodule

@@ -8,8 +8,10 @@ module pio_xy
     input               exec,
     input               is_set,
     input               is_jmp,
+    input               is_out,
     input        [ 2:0] arg_hi,
     input        [ 4:0] arg_lo,
+    input        [31:0] out_data,
     input               jmp_pin,
     input               osre,
 
@@ -55,6 +57,12 @@ module pio_xy
             case (arg_hi)
                 `PIO_COND_X_DEC : x_d = x - 1'b1;
                 `PIO_COND_Y_DEC : y_d = y - 1'b1;
+            endcase
+
+        if (exec & is_out)
+            case (arg_hi)
+                `PIO_DST_X : x_d = out_data;
+                `PIO_DST_Y : y_d = out_data;
             endcase
     end
 
