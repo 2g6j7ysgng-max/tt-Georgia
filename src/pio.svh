@@ -28,4 +28,11 @@
 `define PIO_DST_ISR        3'b110
 `define PIO_DST_EXEC       3'b111
 
+`define PIO_SRC_PINS       3'b000
+`define PIO_SRC_X          3'b001
+`define PIO_SRC_Y          3'b010
+`define PIO_SRC_NULL       3'b011
+`define PIO_SRC_ISR        3'b110
+`define PIO_SRC_OSR        3'b111
+
 `endif

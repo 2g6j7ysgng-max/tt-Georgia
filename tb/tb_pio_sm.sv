@@ -27,11 +27,18 @@ module tb_pio_sm;
     logic [ 3:0] out_count;
     logic        out_shift_right;
     logic [ 4:0] pull_thresh;
+    logic [ 2:0] in_base;
+    logic        in_shift_right;
+    logic [ 4:0] push_thresh;
     logic        tx_empty;
     logic [31:0] tx_data;
+    logic        rx_full;
+    logic [ 7:0] in_pins;
     logic        jmp_pin;
 
     wire         tx_pop;
+    wire         rx_push;
+    wire  [31:0] rx_data;
     wire  [ 7:0] pins;
     wire  [ 4:0] pc;
     wire  [31:0] x;
@@ -126,6 +133,11 @@ module tb_pio_sm;
         out_count       = 4'd1;
         out_shift_right = 1'b1;
         pull_thresh     = '0;
+        in_base         = '0;
+        in_shift_right  = 1'b1;
+        push_thresh     = '0;
+        rx_full         = 1'b0;
+        in_pins         = '0;
         jmp_pin         = 1'b0;
 
         for (int i = 0; i < 4; i ++)

@@ -19,10 +19,19 @@ module pio_sm
     input        [ 3:0] out_count,
     input               out_shift_right,
     input        [ 4:0] pull_thresh,
+    input        [ 2:0] in_base,
+    input               in_shift_right,
+    input        [ 4:0] push_thresh,
 
     input               tx_empty,
     input        [31:0] tx_data,
     output              tx_pop,
+
+    input               rx_full,
+    output              rx_push,
+    output       [31:0] rx_data,
+
+    input        [ 7:0] in_pins,
     input               jmp_pin,
 
     output       [ 7:0] pins,
@@ -86,9 +95,12 @@ module pio_sm
     logic issue;
     logic exec;
     logic stall;
+    logic pull_stall;
+    logic push_stall;
     logic jmp_taken;
 
-    assign exec = issue & ~ stall;
+    assign stall = pull_stall | push_stall;
+    assign exec  = issue & ~ stall;
 
     //------------------------------------------------------------------------
 
@@ -109,6 +121,7 @@ module pio_sm
 
     //------------------------------------------------------------------------
 
+    logic [31:0] osr;
     logic [31:0] out_data;
     logic        osre;
 
@@ -127,12 +140,45 @@ module pio_sm
         .tx_empty      ( tx_empty        ),
         .tx_data       ( tx_data         ),
         .x             ( x               ),
-        .osr           (                 ),
+        .osr           ( osr             ),
         .osr_cnt       (                 ),
         .out_data      ( out_data        ),
         .osre          ( osre            ),
-        .stall         ( stall           ),
+        .stall         ( pull_stall      ),
         .tx_pop        ( tx_pop          )
+    );
+
+    //------------------------------------------------------------------------
+
+    logic [15:0] in_rot;
+    logic [31:0] in_word;
+
+    assign in_rot  = { in_pins, in_pins } >> in_base;
+    assign in_word = { 24'b0, in_rot [7:0] };
+
+    pio_isr i_isr
+    (
+        .clk           ( clk             ),
+        .rst           ( rst             ),
+        .exec          ( exec            ),
+        .is_in         ( is_in           ),
+        .is_push       ( is_push         ),
+        .arg_hi        ( arg_hi          ),
+        .arg_lo        ( arg_lo          ),
+        .push_iffull   ( arg_hi [1]      ),
+        .push_block    ( arg_hi [0]      ),
+        .shift_right   ( in_shift_right  ),
+        .push_thresh   ( push_thresh     ),
+        .in_pins       ( in_word         ),
+        .x             ( x               ),
+        .y             ( y               ),
+        .osr           ( osr             ),
+        .rx_full       ( rx_full         ),
+        .isr           (                 ),
+        .isr_cnt       (                 ),
+        .stall         ( push_stall      ),
+        .rx_push       ( rx_push         ),
+        .rx_data       ( rx_data         )
     );
 
     //------------------------------------------------------------------------
