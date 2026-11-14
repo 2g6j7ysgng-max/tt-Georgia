@@ -18,9 +18,11 @@ module pio_sm
     input        [ 2:0] out_base,
     input        [ 3:0] out_count,
     input               out_shift_right,
+    input               autopull,
     input        [ 4:0] pull_thresh,
     input        [ 2:0] in_base,
     input               in_shift_right,
+    input               autopush,
     input        [ 4:0] push_thresh,
 
     input               tx_empty,
@@ -95,11 +97,11 @@ module pio_sm
     logic issue;
     logic exec;
     logic stall;
-    logic pull_stall;
-    logic push_stall;
+    logic osr_stall;
+    logic isr_stall;
     logic jmp_taken;
 
-    assign stall = pull_stall | push_stall;
+    assign stall = osr_stall | isr_stall;
     assign exec  = issue & ~ stall;
 
     //------------------------------------------------------------------------
@@ -129,6 +131,7 @@ module pio_sm
     (
         .clk           ( clk             ),
         .rst           ( rst             ),
+        .clk_en        ( clk_en          ),
         .exec          ( exec            ),
         .is_out        ( is_out          ),
         .is_pull       ( is_pull         ),
@@ -136,6 +139,7 @@ module pio_sm
         .pull_ifempty  ( arg_hi [1]      ),
         .pull_block    ( arg_hi [0]      ),
         .shift_right   ( out_shift_right ),
+        .autopull      ( autopull        ),
         .pull_thresh   ( pull_thresh     ),
         .tx_empty      ( tx_empty        ),
         .tx_data       ( tx_data         ),
@@ -144,7 +148,7 @@ module pio_sm
         .osr_cnt       (                 ),
         .out_data      ( out_data        ),
         .osre          ( osre            ),
-        .stall         ( pull_stall      ),
+        .stall         ( osr_stall       ),
         .tx_pop        ( tx_pop          )
     );
 
@@ -168,6 +172,7 @@ module pio_sm
         .push_iffull   ( arg_hi [1]      ),
         .push_block    ( arg_hi [0]      ),
         .shift_right   ( in_shift_right  ),
+        .autopush      ( autopush        ),
         .push_thresh   ( push_thresh     ),
         .in_pins       ( in_word         ),
         .x             ( x               ),
@@ -176,7 +181,7 @@ module pio_sm
         .rx_full       ( rx_full         ),
         .isr           (                 ),
         .isr_cnt       (                 ),
-        .stall         ( push_stall      ),
+        .stall         ( isr_stall       ),
         .rx_push       ( rx_push         ),
         .rx_data       ( rx_data         )
     );

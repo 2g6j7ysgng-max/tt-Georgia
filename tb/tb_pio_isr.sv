@@ -24,6 +24,7 @@ module tb_pio_isr;
     logic        push_iffull;
     logic        push_block;
     logic        shift_right;
+    logic        autopush;
     logic [ 4:0] push_thresh;
     logic [31:0] in_pins;
     logic [31:0] x;
@@ -114,6 +115,7 @@ module tb_pio_isr;
         push_iffull = 1'b0;
         push_block  = 1'b1;
         shift_right = 1'b1;
+        autopush    = 1'b0;
         push_thresh = '0;
         in_pins     = '0;
         x           = '0;
@@ -176,6 +178,38 @@ module tb_pio_isr;
         x = 32'hFF;
 
         run ("in without exec",              0, 1, 0, 1, 0, `PIO_SRC_X,     8, 0, 0, 'x,    32'h0,          0);
+
+        autopush    = 1'b1;
+        shift_right = 1'b1;
+        push_thresh = 5'd8;
+        in_pins     = 32'hA;
+
+        run ("autopush, in pins 4",          1, 1, 0, 1, 0, `PIO_SRC_PINS,  4, 0, 0, 'x,    32'hA000_0000,  4);
+
+        in_pins     = 32'h5;
+
+        run ("autopush, in pins 4, push",    1, 1, 0, 1, 0, `PIO_SRC_PINS,  4, 0, 1, 32'h5A00_0000, 32'h0, 0);
+
+        rx_full     = 1'b1;
+
+        run ("autopush, rx full, stall",     0, 1, 0, 1, 0, `PIO_SRC_X,     8, 1, 0, 'x,    32'h0,          0);
+
+        rx_full     = 1'b0;
+
+        run ("autopush, rx free, push",      1, 1, 0, 1, 0, `PIO_SRC_X,     8, 0, 1, 32'hFF00_0000, 32'h0, 0);
+
+        y           = 32'h1234_5678;
+
+        run ("autopush, in y 32",            1, 1, 0, 1, 0, `PIO_SRC_Y,     0, 0, 1, 32'h1234_5678, 32'h0, 0);
+
+        in_pins     = 32'h7;
+
+        run ("autopush, in pins 3",          1, 1, 0, 1, 0, `PIO_SRC_PINS,  3, 0, 0, 'x,    32'hE000_0000,  3);
+        run ("autopush, explicit push",      1, 0, 1, 1, 0, `PIO_SRC_PINS,  0, 0, 1, 32'hE000_0000, 32'h0, 0);
+
+        autopush    = 1'b0;
+
+        run ("autopush off, no push",        1, 1, 0, 1, 0, `PIO_SRC_X,     8, 0, 0, 'x,    32'hFF00_0000,  8);
 
         $display ("PASS %s", `__FILE__);
         $finish;

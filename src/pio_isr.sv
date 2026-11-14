@@ -14,6 +14,7 @@ module pio_isr
     input               push_block,
 
     input               shift_right,
+    input               autopush,
     input        [ 4:0] push_thresh,
 
     input        [31:0] in_pins,
@@ -40,22 +41,11 @@ module pio_isr
 
     //------------------------------------------------------------------------
 
-    logic push_nop;
-    logic do_push;
-    logic do_in;
-
-    assign push_nop = push_iffull & (isr_cnt < thresh);
-    assign stall    = is_push & push_block & rx_full & ~ push_nop;
-    assign do_push  = exec & is_push & ~ push_nop;
-    assign do_in    = exec & is_in;
-    assign rx_push  = do_push & ~ rx_full;
-    assign rx_data  = isr;
-
-    //------------------------------------------------------------------------
-
     logic [31:0] src;
     logic [31:0] in_bits;
-       always_comb
+    logic [31:0] isr_in;
+
+    always_comb
         case (arg_hi)
             default       : src = '0;
             `PIO_SRC_PINS : src = in_pins;
@@ -68,6 +58,29 @@ module pio_isr
 
     assign in_bits = src & (32'hFFFF_FFFF >> (6'd32 - n));
 
+    assign isr_in  = shift_right ? ((isr >> n) | (in_bits << (6'd32 - n)))
+                                 : ((isr << n) |  in_bits);
+
+    //------------------------------------------------------------------------
+
+    logic push_nop;
+    logic do_push;
+    logic do_in;
+    logic in_full;
+    logic do_autopush;
+
+    assign push_nop    = push_iffull & (isr_cnt < thresh);
+    assign do_push     = exec & is_push & ~ push_nop;
+    assign do_in       = exec & is_in;
+    assign in_full     = autopush & is_in & (cnt_sum >= { 1'b0, thresh });
+    assign do_autopush = exec & in_full;
+
+    assign stall       =   (is_push & push_block & rx_full & ~ push_nop)
+                         | (in_full & rx_full);
+
+    assign rx_push     = (do_push & ~ rx_full) | do_autopush;
+    assign rx_data     = do_autopush ? isr_in : isr;
+
     //------------------------------------------------------------------------
 
     logic [31:0] isr_d;
@@ -78,15 +91,14 @@ module pio_isr
         isr_d     = isr;
         isr_cnt_d = isr_cnt;
 
-        if (do_push)
+        if (do_push | do_autopush)
         begin
             isr_d     = '0;
             isr_cnt_d = '0;
         end
-                else if (do_in)
+        else if (do_in)
         begin
-            isr_d     = shift_right ? ((isr >> n) | (in_bits << (6'd32 - n)))
-                                    : ((isr << n) |  in_bits);
+            isr_d     = isr_in;
             isr_cnt_d = (cnt_sum > 7'd32) ? 6'd32 : cnt_sum [5:0];
         end
     end

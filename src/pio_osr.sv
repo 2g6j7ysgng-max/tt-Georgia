@@ -2,6 +2,7 @@ module pio_osr
 (
     input               clk,
     input               rst,
+    input               clk_en,
 
     input               exec,
     input               is_out,
@@ -11,6 +12,7 @@ module pio_osr
     input               pull_block,
 
     input               shift_right,
+    input               autopull,
     input        [ 4:0] pull_thresh,
 
     input               tx_empty,
@@ -39,12 +41,21 @@ module pio_osr
     logic pull_nop;
     logic do_pull;
     logic do_out;
+    logic out_last;
+    logic autopull_now;
 
     assign pull_nop = pull_ifempty & ~ osre;
-    assign stall    = is_pull & pull_block & tx_empty & ~ pull_nop;
     assign do_pull  = exec & is_pull & ~ pull_nop;
     assign do_out   = exec & is_out;
-    assign tx_pop   = do_pull & ~ tx_empty;
+    assign out_last = autopull & do_out & (cnt_sum >= { 1'b0, thresh });
+
+    assign stall    =   (is_pull & pull_block & tx_empty & ~ pull_nop)
+                      | (autopull & is_out & osre);
+
+    assign autopull_now = autopull & ~ tx_empty
+                          & ((osre & clk_en & ~ do_pull) | out_last);
+
+    assign tx_pop   = (do_pull & ~ tx_empty) | autopull_now;
 
     //------------------------------------------------------------------------
 
@@ -64,6 +75,11 @@ module pio_osr
         if (do_pull)
         begin
             osr_d     = tx_empty ? x : tx_data;
+            osr_cnt_d = '0;
+        end
+        else if (autopull_now)
+        begin
+            osr_d     = tx_data;
             osr_cnt_d = '0;
         end
         else if (do_out)

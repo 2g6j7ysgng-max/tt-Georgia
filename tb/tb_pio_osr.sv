@@ -14,6 +14,7 @@ module tb_pio_osr;
 
     //------------------------------------------------------------------------
 
+    logic        clk_en;
     logic        exec;
     logic        is_out;
     logic        is_pull;
@@ -21,6 +22,7 @@ module tb_pio_osr;
     logic        pull_ifempty;
     logic        pull_block;
     logic        shift_right;
+    logic        autopull;
     logic [ 4:0] pull_thresh;
     logic        tx_empty;
     logic [31:0] tx_data;
@@ -107,6 +109,7 @@ module tb_pio_osr;
     initial
     begin
         rst          = 1'b1;
+        clk_en       = 1'b1;
         exec         = 1'b0;
         is_out       = 1'b0;
         is_pull      = 1'b0;
@@ -114,6 +117,7 @@ module tb_pio_osr;
         pull_ifempty = 1'b0;
         pull_block   = 1'b1;
         shift_right  = 1'b1;
+        autopull     = 1'b0;
         pull_thresh  = '0;
         tx_empty     = 1'b1;
         tx_data      = '0;
@@ -163,6 +167,55 @@ module tb_pio_osr;
         run ("out 1, left",                     1, 1, 0, 1,  0,  1,  32'h1,         0,    0,  32'h2,          1, 0);
         run ("out 4, left",                     1, 1, 0, 1,  0,  4,  32'h0,         0,    0,  32'h20,         5, 0);
         run ("out without exec",                0, 1, 0, 1,  0,  3,  32'h0,         0,    0,  32'h20,         5, 0);
+
+        autopull    = 1'b1;
+        shift_right = 1'b1;
+        pull_thresh = 5'd8;
+        x           = 32'h1234;
+
+        run ("autopull, out 3 reaches thresh",  1, 1, 0, 1,  0,  3,  32'h0,         0,    0,  32'h4,          8, 1);
+        run ("autopull, out on empty, no data", 0, 1, 0, 1,  0,  1,  32'h0,         1,    0,  32'h4,          8, 1);
+
+        tx_empty = 1'b0;
+        tx_data  = 32'hC5;
+
+        run ("autopull, out on empty, refill",  0, 1, 0, 1,  0,  1,  32'h0,         1,    1,  32'hC5,         0, 0);
+
+        tx_empty = 1'b1;
+
+        run ("autopull, out 1 after refill",    1, 1, 0, 1,  0,  1,  32'h1,         0,    0,  32'h62,         1, 0);
+
+        tx_empty = 1'b0;
+        tx_data  = 32'h33;
+
+        run ("autopull, out 7, shift + refill", 1, 1, 0, 1,  0,  7,  32'h62,        0,    1,  32'h33,         0, 0);
+
+        tx_empty = 1'b1;
+
+        run ("autopull, out 8, fifo empty",     1, 1, 0, 1,  0,  8,  32'h33,        0,    0,  32'h0,          8, 1);
+
+        tx_empty = 1'b0;
+        tx_data  = 32'hA7;
+
+        run ("autopull, background refill",     1, 0, 0, 1,  0,  0,  'x,            0,    1,  32'hA7,         0, 0);
+
+        tx_empty = 1'b1;
+
+        run ("autopull, out 8 again",           1, 1, 0, 1,  0,  8,  32'hA7,        0,    0,  32'h0,          8, 1);
+
+        clk_en   = 1'b0;
+        tx_empty = 1'b0;
+        tx_data  = 32'h5A;
+
+        run ("autopull, no refill, clk_en 0",   0, 0, 0, 1,  0,  0,  'x,            0,    0,  32'h0,          8, 1);
+
+        clk_en   = 1'b1;
+
+        run ("autopull, refill in delay cycle", 0, 0, 0, 1,  0,  0,  'x,            0,    1,  32'h5A,         0, 0);
+
+        tx_data  = 32'h1111_1111;
+
+        run ("autopull, explicit pull",         1, 0, 1, 1,  0,  0,  'x,            0,    1,  32'h1111_1111,  0, 0);
 
         $display ("PASS %s", `__FILE__);
         $finish;
